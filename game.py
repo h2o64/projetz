@@ -98,9 +98,13 @@ class Paquet:
 	def __init__(self, cartes):
 		self.paquet = queue.Queue(max_size)
 		self.longueur = 0
+		self.nbFiguresInit = 0
 		# On remplit le paquet
 		for carte in cartes:
-			self.paquet.put(Carte(carte))
+			carte_obj = Carte(carte)
+			if carte_obj.isFigure():
+				self.nbFiguresInit += 1
+			self.paquet.put(carte_obj)
 			self.longueur += 1
 
 	# On pose une carte
@@ -126,6 +130,11 @@ class Paquet:
 			self.paquet.put(carte)
 		self.longueur += longueur
 		tapis.reset()
+
+	# Copie un paquet
+	def copy(self):
+		cartes = [carte.num for carte in list(self.paquet.queue)[:]]
+		return Paquet(cartes)
 
 	# Convertit en string
 	def __str__(self):
@@ -163,6 +172,44 @@ class Joueur:
 	def __str__(self):
 		return self.prenom + " " + self.nom
 
+# Statistiques
+import matplotlib.pyplot as plt
+class Stats:
+
+	# Constructeur
+	def __init__(self, partie, id_gagnant):
+		self.partie = partie
+		self.gagnant = partie.profilJoueurs[id_gagnant]
+		self.id_gagnant = id_gagnant
+		self.temps = partie.temps
+		self.nb_joueurs = partie.nbJoueurs
+		self.variation_longeur_paquet_joueurs = partie.longueur_paquets
+		self.compo_init_paquets = partie.paquets_init
+
+	# Conversion en string
+	def __str__(self):
+		ret = ""
+		ret += "nb_joueurs = " + str(self.nb_joueurs) + "\n"
+		ret += "duree partie = " + str(self.temps) + "\n"
+		ret += "gagnant = " + str(self.gagnant) + "\n"
+		for joueur in range(self.nb_joueurs):
+			ret += "  " + str(self.partie.profilJoueurs[joueur]) + " avait " + str(self.compo_init_paquets[joueur].nbFiguresInit) + " figures.\n"
+		return ret
+
+	# Traitement pour graphiques
+	def evolTaillePaquets(self):
+		X = list(range(self.temps))
+		# Tailles paquets
+		plt.figure(1)
+		for joueur in range(self.nb_joueurs):
+			plt.plot(X,self.variation_longeur_paquet_joueurs[joueur],label=self.partie.profilJoueurs[joueur])
+		# Concentration
+		plt.figure(2)
+		for joueur in range(self.nb_joueurs):
+			Y = [self.partie.profilJoueurs[joueur].lossFunction(k) for k in X]
+			plt.plot(X,Y,label="Concentration " + str(self.partie.profilJoueurs[joueur]))
+		plt.legend()
+		plt.show()
 
 # Partie de bataille Corse
 class Partie:
@@ -195,6 +242,10 @@ class Partie:
 		# Game
 		self.main = 0
 		self.temps = 0
+
+		# Statistiques
+		self.longueur_paquets = [[] for k in range(self.nbJoueurs)]
+		self.paquets_init = [paquet.copy() for paquet in self.paquets]
 
 	# Vérifie si la partie est terminée
 	def victory(self):
@@ -255,6 +306,9 @@ class Partie:
 		price = 0
 		defiEnCours = False
 		while (not victory):
+			# Remenber number of cards for each player
+			for joueur in range(self.nbJoueurs):
+				self.longueur_paquets[joueur].append(self.paquets[joueur].length())
 			# Check for victory
 			victory, winner = self.victory()
 			# Affichage de la situation actuelle
@@ -322,4 +376,6 @@ class Partie:
 						print("    " + str(self.paquets[gagnant]))
 					self.main = gagnant
 			self.temps += 1
-		print("The winner is " + str(self.profilJoueurs[winner]))
+		if self.debug:
+			print("The winner is " + str(self.profilJoueurs[winner]))
+		return Stats(self, winner)
